@@ -8,7 +8,8 @@ use bg3_lib::package_reader::PackageReader;
 use ctor::*;
 use lazy_static::lazy_static;
 use shards::types::{
-    ClonedVar, Context, ExposedTypes, InstanceData, Type, Types, Var, NONE_TYPES, STRING_TYPES,
+    AutoTableVar, ClonedVar, Context, ExposedTypes, InstanceData, TableVar, Type, Types, Var,
+    ANY_TABLE_TYPES, NONE_TYPES, STRING_TYPES,
 };
 use shards::*;
 
@@ -90,6 +91,7 @@ impl Shard for BG3LoadSaveFile {
             shlog_error!("Failed to read package: {}", e);
             "Failed to read package"
         })?;
+
         self.package = Var::new_ref_counted(
             larian_save_file::LarianSaveFile(reader, package),
             &PACKAGE_TYPE,
@@ -104,14 +106,14 @@ impl Shard for BG3LoadSaveFile {
 struct BG3Globals {
     #[shard_required]
     required: ExposedTypes,
-    resource: ClonedVar,
+    output: AutoTableVar,
 }
 
 impl Default for BG3Globals {
     fn default() -> Self {
         Self {
             required: ExposedTypes::new(),
-            resource: ClonedVar::default(),
+            output: AutoTableVar::new(),
         }
     }
 }
@@ -123,7 +125,7 @@ impl Shard for BG3Globals {
     }
 
     fn output_types(&mut self) -> &Types {
-        &RESOURCE_TYPES
+        &ANY_TABLE_TYPES
     }
 
     fn warmup(&mut self, ctx: &Context) -> Result<(), &str> {
@@ -154,10 +156,15 @@ impl Shard for BG3Globals {
             "Failed to load globals"
         })?;
 
-        self.resource =
-            Var::new_ref_counted(larian_resource::LarianResource(globals), &RESOURCE_TYPE).into();
+        let regions = globals.regions;
+        self.output.0.clear();
+        for node in regions.get_region_nodes() {
+            let name = node.name.as_str();
+            let foo: Var = true.into();
+            self.output.0.insert_fast_static(name, &foo);
+        }
 
-        Ok(Some(self.resource.0))
+        Ok(Some(self.output.0 .0))
     }
 }
 
