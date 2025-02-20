@@ -3,3 +3,5 @@ test/externals/*.dylib
 test/externals/*.dll
 test/externals/*.so
 *.log
+*.lsv
+.DS_Store
