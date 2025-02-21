@@ -8,8 +8,8 @@ use bg3_lib::package_reader::PackageReader;
 use ctor::*;
 use lazy_static::lazy_static;
 use shards::types::{
-    AutoTableVar, ClonedVar, Context, ExposedTypes, InstanceData, TableVar, Type, Types, Var,
-    ANY_TABLE_TYPES, NONE_TYPES, STRING_TYPES,
+    AutoSeqVar, AutoTableVar, ClonedVar, Context, ExposedTypes, InstanceData, TableVar, Type,
+    Types, Var, ANY_TABLE_TYPES, NONE_TYPES, STRING_TYPES,
 };
 use shards::*;
 
@@ -158,27 +158,48 @@ impl Shard for BG3Globals {
 
         let regions = globals.regions;
         self.output.0.clear();
-        for node in regions.get_region_nodes() {
-            let name = node.name.as_str();
 
+        // Helper function to process a node and its children
+        fn process_node(
+            node_idx: usize,
+            regions: &bg3_lib::lsf_reader::RegionArena,
+        ) -> (String, AutoTableVar) {
+            let node = regions.get_node(node_idx).unwrap();
+            let mut node_table = AutoTableVar::new();
+
+            // Add attributes
             let mut attributes = AutoTableVar::new();
             for (name, attribute) in node.attributes.iter() {
-                attributes.0.insert_fast_static(name.as_str(), &true.into());
+                let debug_str = format!("{:?}", attribute);
+                let v = Var::ephemeral_string(debug_str.as_str());
+                attributes.0.insert_fast_static(name.as_str(), &v);
             }
-
-            let mut childrens = AutoTableVar::new();
-            for (name, children) in node.children.iter() {
-                childrens.0.insert_fast_static(name.as_str(), &true.into());
-            }
-
-            let mut nodeTable = AutoTableVar::new();
             let k = Var::ephemeral_string("attributes");
-            nodeTable.0.emplace_table(k, attributes);
-            let k = Var::ephemeral_string("children");
-            nodeTable.0.emplace_table(k, childrens);
+            node_table.0.emplace_table(k, attributes);
 
-            let k = Var::ephemeral_string(name);
-            self.output.0.emplace_table(k, nodeTable);
+            // Process children recursively
+            let mut children_table = AutoTableVar::new();
+            for (name, child_indices) in node.children.iter() {
+                let mut child_list = AutoSeqVar::new();
+                for child_idx in child_indices.iter() {
+                    let (child_name, child_node) = process_node(*child_idx, regions);
+                    let k = Var::ephemeral_string(child_name.as_str());
+                    child_list.0.emplace_table(child_node);
+                }
+                let k = Var::ephemeral_string(name);
+                children_table.0.emplace_seq(k, child_list);
+            }
+            let k = Var::ephemeral_string("children");
+            node_table.0.emplace_table(k, children_table);
+
+            (node.name.clone(), node_table)
+        }
+
+        // Process all region nodes
+        for (name, node_idx) in &regions.regions_indices {
+            let (name, node_table) = process_node(*node_idx, &regions);
+            let k = Var::ephemeral_string(name.as_str());
+            self.output.0.emplace_table(k, node_table);
         }
 
         Ok(Some(self.output.0 .0))

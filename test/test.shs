@@ -1,3 +1,6 @@
 "Campsite - 7h 15m.lsv" | BG3.LoadSaveFile | Log
-BG3.Globals | ToJson(Indent: 2) = globals-str
+BG3.Globals
+{ForEach({Take(0) | Log})}
+Take("Journal")
+ToJson(Indent: 2) = globals-str
 "globals.json" | FS.Write(globals-str Overwrite: true)
