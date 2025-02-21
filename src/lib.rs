@@ -160,8 +160,25 @@ impl Shard for BG3Globals {
         self.output.0.clear();
         for node in regions.get_region_nodes() {
             let name = node.name.as_str();
-            let foo: Var = true.into();
-            self.output.0.insert_fast_static(name, &foo);
+
+            let mut attributes = AutoTableVar::new();
+            for (name, attribute) in node.attributes.iter() {
+                attributes.0.insert_fast_static(name.as_str(), &true.into());
+            }
+
+            let mut childrens = AutoTableVar::new();
+            for (name, children) in node.children.iter() {
+                childrens.0.insert_fast_static(name.as_str(), &true.into());
+            }
+
+            let mut nodeTable = AutoTableVar::new();
+            let k = Var::ephemeral_string("attributes");
+            nodeTable.0.emplace_table(k, attributes);
+            let k = Var::ephemeral_string("children");
+            nodeTable.0.emplace_table(k, childrens);
+
+            let k = Var::ephemeral_string(name);
+            self.output.0.emplace_table(k, nodeTable);
         }
 
         Ok(Some(self.output.0 .0))

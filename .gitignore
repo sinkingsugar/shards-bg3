@@ -5,3 +5,4 @@ test/externals/*.so
 *.log
 *.lsv
 .DS_Store
+test/globals.json
